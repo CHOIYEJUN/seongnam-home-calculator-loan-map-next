@@ -1,36 +1,96 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 성남시 전세정보 - Next.js 프로젝트
 
-## Getting Started
+React 19와 Next.js 15를 사용한 성남시 전세 매물 정보 및 대출 계산기 애플리케이션입니다.
 
-First, run the development server:
+## 기술 스택
+
+- **프레임워크**: Next.js 15 (App Router)
+- **React**: 19.2.3
+- **상태 관리**: Zustand
+- **폼 관리**: React Hook Form + Zod
+- **UI 컴포넌트**: shadcn/ui
+- **스타일링**: Tailwind CSS
+- **아키텍처**: Feature-Sliced Design (FSD)
+
+## 프로젝트 구조 (FSD)
+
+```
+├── app/                    # Next.js App Router
+│   ├── layout.tsx         # 루트 레이아웃
+│   └── page.tsx           # 메인 페이지
+├── shared/                 # 공유 레이어
+│   ├── config/            # 설정 (Zustand 스토어)
+│   ├── lib/               # 유틸리티 함수
+│   ├── types/             # 타입 정의
+│   └── ui/                # 공유 UI 컴포넌트
+├── entities/              # 엔티티 레이어
+│   ├── property/          # 매물 엔티티
+│   └── loan/              # 대출 엔티티
+├── features/              # 기능 레이어
+│   ├── search/            # 검색 기능
+│   ├── property-selection/ # 매물 선택 기능
+│   └── loan-calculation/  # 대출 계산 기능
+├── widgets/               # 위젯 레이어
+│   ├── header/            # 헤더 위젯
+│   ├── map-view/          # 지도 뷰 위젯
+│   └── calculator-view/   # 계산기 뷰 위젯
+└── components/            # shadcn/ui 컴포넌트
+    └── ui/
+```
+
+## 시작하기
+
+### 1. 의존성 설치
+
+```bash
+npm install
+```
+
+### 2. 환경 변수 설정
+
+`.env.local` 파일을 생성하고 다음 내용을 추가하세요:
+
+```env
+NEXT_PUBLIC_KAKAO_MAP_API_KEY=your_kakao_map_api_key_here
+```
+
+카카오맵 API 키는 [카카오 개발자 콘솔](https://developers.kakao.com/)에서 발급받을 수 있습니다.
+
+### 3. 개발 서버 실행
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+브라우저에서 [http://localhost:3000](http://localhost:3000)을 열어 확인하세요.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. 빌드
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## 주요 기능
 
-To learn more about Next.js, take a look at the following resources:
+- 🗺️ **지도 기반 매물 검색**: 카카오맵을 활용한 성남시 전세 매물 지도
+- 🔍 **필터링**: 매물 유형, 가격 범위 필터
+- 📊 **대출 계산기**: 다양한 대출 상품 비교 및 상환액 계산
+- 💰 **대출 상품**: 은행, 주택공사, 정부 상품 비교
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 사용된 라이브러리
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `next`: Next.js 프레임워크
+- `react`, `react-dom`: React 19
+- `zustand`: 상태 관리
+- `react-hook-form`: 폼 관리
+- `zod`: 스키마 검증
+- `@hookform/resolvers`: RHF + Zod 통합
+- `lucide-react`: 아이콘
+- `recharts`: 차트 (향후 확장용)
+- `tailwindcss`: 스타일링
+- `shadcn/ui`: UI 컴포넌트
 
-## Deploy on Vercel
+## 라이선스
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+MIT
