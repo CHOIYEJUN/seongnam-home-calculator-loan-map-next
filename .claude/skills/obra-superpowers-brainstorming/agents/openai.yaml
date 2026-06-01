@@ -1,0 +1,5 @@
+interface:
+  display_name: Superpowers Brainstorming
+  short_description: You MUST use this before any creative work - creating feature...
+  default_prompt: Use $superpowers-brainstorming
+

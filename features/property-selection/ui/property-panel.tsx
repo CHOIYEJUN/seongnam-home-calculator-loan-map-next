@@ -1,16 +1,50 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { PropertyUnit } from '@/shared/types/property';
 import { formatCurrency } from '@/shared/lib/format';
+import { predictJeonsePrice } from '@/shared/lib/jeonse-predict';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Building2, MapPin, Home, Calculator } from 'lucide-react';
+import { Building2, MapPin, Home, Calculator, Sparkles } from 'lucide-react';
 import { useAppStore } from '@/shared/config/store';
 
 export function PropertyPanel() {
   const { selectedProperty, selectedUnit, setSelectedUnit, setCurrentView } = useAppStore();
+  const [aiPredictedJeonse, setAiPredictedJeonse] = useState<number | null>(null);
+  const [aiPredictLoading, setAiPredictLoading] = useState(false);
+  const [aiPredictError, setAiPredictError] = useState<string | null>(null);
+
+  // 선택된 유닛이 바뀔 때마다 전세 AI 예측 호출
+  useEffect(() => {
+    if (!selectedProperty || !selectedUnit) {
+      setAiPredictedJeonse(null);
+      setAiPredictError(null);
+      return;
+    }
+    setAiPredictLoading(true);
+    setAiPredictError(null);
+    const salePriceMan = Math.round(selectedUnit.marketPrice / 10000);
+    predictJeonsePrice({
+      salePrice: salePriceMan,
+      area: selectedUnit.area,
+      floor: selectedUnit.floor ?? Math.round((selectedProperty.floor ?? 10) / 2),
+      buildYear: selectedProperty.buildYear ?? 2000,
+      saleYear: new Date().getFullYear(),
+    })
+      .then((price) => {
+        setAiPredictedJeonse(price);
+      })
+      .catch((err) => {
+        setAiPredictedJeonse(null);
+        setAiPredictError(err instanceof Error ? err.message : '예측을 불러올 수 없습니다.');
+      })
+      .finally(() => {
+        setAiPredictLoading(false);
+      });
+  }, [selectedProperty, selectedUnit]);
 
   const handleCalculateLoan = () => {
     if (selectedProperty && selectedUnit) {
@@ -36,7 +70,7 @@ export function PropertyPanel() {
       <div className="bg-primary text-primary-foreground p-4 space-y-2 flex-shrink-0">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <h3>{selectedProperty.name}</h3>
+            <h3 className="text-lg font-semibold">{selectedProperty.name}</h3>
             <div className="flex items-center gap-1 mt-1 opacity-90">
               <MapPin className="w-4 h-4" />
               <p className="text-sm">{selectedProperty.address}</p>
@@ -77,7 +111,7 @@ export function PropertyPanel() {
         {selectedUnit && (
           <div className="p-4 space-y-4">
             <div>
-              <h4 className="mb-3">매물 정보</h4>
+              <h4 className="text-base font-medium mb-3">매물 정보</h4>
               <div className="space-y-3">
                 <Card className="p-3 bg-accent/30">
                   <div className="flex justify-between items-center">
@@ -97,6 +131,23 @@ export function PropertyPanel() {
                     <span className="text-primary">
                       {formatCurrency(selectedUnit.jeonsePrice)}
                     </span>
+                  </div>
+                </Card>
+                <Card className="p-3 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                      전세 AI 예측가
+                    </span>
+                    {aiPredictLoading ? (
+                      <span className="text-sm text-muted-foreground">예측 중...</span>
+                    ) : aiPredictError ? (
+                      <span className="text-sm text-destructive">{aiPredictError}</span>
+                    ) : aiPredictedJeonse !== null ? (
+                      <span className="font-medium text-amber-700 dark:text-amber-400">
+                        {formatCurrency(aiPredictedJeonse)}
+                      </span>
+                    ) : null}
                   </div>
                 </Card>
               </div>

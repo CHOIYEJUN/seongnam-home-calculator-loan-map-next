@@ -13,9 +13,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { 
-  Building2, 
-  Home, 
+import {
+  Building2,
+  Home,
   ArrowLeft,
   Calculator,
   TrendingUp,
@@ -24,6 +24,16 @@ import {
   ChevronRight,
   CheckCircle2
 } from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer
+} from 'recharts';
 import { useAppStore } from '@/shared/config/store';
 
 export function LoanCalculator() {
@@ -45,7 +55,7 @@ export function LoanCalculator() {
   const filteredProducts = loanProducts.filter(p => p.category === selectedCategory);
 
   // 대출 계산 결과
-  const calculation = selectedProduct 
+  const calculation = selectedProduct
     ? calculateLoanRepayment(loanAmount, selectedProduct.interestRate, loanPeriod, repaymentMethod)
     : null;
 
@@ -60,6 +70,14 @@ export function LoanCalculator() {
     }
   };
 
+  // WO-03: 다른 조건으로 계산 — 상품 선택 초기화
+  const handleReset = () => {
+    setSelectedProduct(null);
+    setLoanAmount(selectedUnit ? selectedUnit.jeonsePrice * 0.8 : 0);
+    setLoanPeriod(24);
+    setRepaymentMethod('maturity');
+  };
+
   if (!selectedProperty || !selectedUnit) {
     return (
       <div className="flex-1 flex items-center justify-center bg-muted">
@@ -71,7 +89,7 @@ export function LoanCalculator() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-primary/5">
       <div className="max-w-7xl mx-auto p-6">
         {/* 헤더 */}
         <div className="mb-6">
@@ -79,11 +97,11 @@ export function LoanCalculator() {
             <ArrowLeft className="w-4 h-4 mr-2" />
             지도로 돌아가기
           </Button>
-          
+
           <Card className="p-6 bg-white">
             <div className="flex items-start justify-between">
               <div>
-                <h2>{selectedProperty.name}</h2>
+                <h2 className="text-2xl font-bold">{selectedProperty.name}</h2>
                 <p className="text-muted-foreground mt-1">{selectedProperty.address}</p>
                 <div className="flex items-center gap-4 mt-3">
                   <div className="flex items-center gap-2">
@@ -109,7 +127,7 @@ export function LoanCalculator() {
           {/* 왼쪽: 대출 상품 선택 */}
           <Card className="lg:col-span-1 bg-white">
             <div className="p-6 border-b">
-              <h3>대출 상품 선택</h3>
+              <h3 className="text-lg font-semibold">대출 상품 선택</h3>
               <p className="text-muted-foreground text-sm mt-1">
                 원하시는 대출 상품을 선택해주세요
               </p>
@@ -143,7 +161,7 @@ export function LoanCalculator() {
                               {selectedProduct?.id === product.id && (
                                 <CheckCircle2 className="w-5 h-5 text-primary" />
                               )}
-                              <h4 className="line-clamp-1">{product.name}</h4>
+                              <h4 className="text-base font-medium line-clamp-1">{product.name}</h4>
                             </div>
                             <p className="text-sm text-muted-foreground mt-1">
                               {product.provider}
@@ -178,20 +196,25 @@ export function LoanCalculator() {
               <>
                 {/* 대출 조건 설정 */}
                 <Card className="p-6 bg-white">
-                  <h3 className="mb-6">대출 조건 설정</h3>
-                  
+                  <h3 className="text-lg font-semibold mb-6">대출 조건 설정</h3>
+
                   <div className="space-y-6">
                     {/* 대출 금액 */}
                     <div className="space-y-2">
                       <Label>대출 금액</Label>
                       <div className="flex gap-3">
                         <div className="flex-1">
+                          {/* WO-10: min=0, max, 음수 방어 */}
                           <Input
                             type="number"
                             value={loanAmount}
-                            onChange={(e) => setLoanAmount(Number(e.target.value))}
+                            min={0}
                             max={selectedProduct.maxAmount}
                             step={1000000}
+                            onChange={(e) => {
+                              const val = Math.max(0, Math.min(Number(e.target.value), selectedProduct.maxAmount));
+                              setLoanAmount(val);
+                            }}
                           />
                         </div>
                         <div className="flex items-center px-4 bg-accent rounded-md">
@@ -245,7 +268,7 @@ export function LoanCalculator() {
                                 <span className="text-sm text-muted-foreground">
                                   {method === 'maturity' && '만기에 원금 일시 상환'}
                                   {method === 'equal-principal' && '원금 동일, 이자 감소'}
-                                  {method === 'equal-payment' && '매월 동일 금액'}                 
+                                  {method === 'equal-payment' && '매월 동일 금액'}
                                 </span>
                               </div>
                             </label>
@@ -254,13 +277,13 @@ export function LoanCalculator() {
                       </RadioGroup>
                     </div>
 
-                    {/* 금리 정보 */}
-                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    {/* 금리 정보 — WO-05: primary 토큰 사용 */}
+                    <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
-                        <TrendingUp className="w-5 h-5 text-blue-600" />
+                        <TrendingUp className="w-5 h-5 text-primary" />
                         <span>적용 금리</span>
                       </div>
-                      <p className="text-2xl text-blue-600">
+                      <p className="text-2xl text-primary">
                         {selectedProduct.interestRate}% <span className="text-base">연</span>
                       </p>
                     </div>
@@ -270,24 +293,25 @@ export function LoanCalculator() {
                 {/* 계산 결과 */}
                 {calculation && (
                   <>
-                    <Card className="p-6 bg-gradient-to-br from-blue-500 to-indigo-600 text-white">
+                    {/* WO-05: 그라디언트 카드 — primary 토큰 */}
+                    <Card className="p-6 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground">
                       <div className="flex items-center gap-3 mb-6">
                         <div className="p-3 bg-white/20 rounded-lg">
                           <Calculator className="w-6 h-6" />
                         </div>
                         <div>
-                          <h3 className="text-white">월 상환액</h3>
-                          <p className="text-blue-100 text-sm">
+                          <h3 className="text-lg font-semibold text-primary-foreground">월 상환액</h3>
+                          <p className="text-primary-foreground/70 text-sm">
                             {getRepaymentMethodName(repaymentMethod)} 기준
                           </p>
                         </div>
                       </div>
-                      
+
                       <p className="text-4xl mb-2">
                         {formatCurrency(calculation.monthlyPayment)}
                       </p>
-                      <p className="text-blue-100">
-                        {repaymentMethod === 'maturity' 
+                      <p className="text-primary-foreground/70">
+                        {repaymentMethod === 'maturity'
                           ? '매월 이자만 납부 (만기에 원금 상환)'
                           : '매월 납부액'
                         }
@@ -313,9 +337,47 @@ export function LoanCalculator() {
                       </Card>
                     </div>
 
+                    {/* WO-11: 월별 상환 스케줄 Bar Chart */}
+                    {calculation.schedule && calculation.schedule.length > 0 && (
+                      <Card className="p-6 bg-white">
+                        <h3 className="text-lg font-semibold mb-4">월별 상환 스케줄</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          원금과 이자의 월별 납부 구성을 확인하세요
+                        </p>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <BarChart
+                            data={calculation.schedule.map((item) => ({
+                              month: `${item.month}월`,
+                              원금: Math.round(item.principal / 10000),
+                              이자: Math.round(item.interest / 10000),
+                            }))}
+                            margin={{ top: 4, right: 16, left: 16, bottom: 4 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                            <XAxis
+                              dataKey="month"
+                              tick={{ fontSize: 11 }}
+                              interval={Math.floor(calculation.schedule.length / 6)}
+                            />
+                            <YAxis
+                              tick={{ fontSize: 11 }}
+                              tickFormatter={(v: number) => `${v}만`}
+                            />
+                            <Tooltip
+                              formatter={(value: number | undefined) => [`${value || 0}만원`]}
+                              labelStyle={{ fontWeight: 600 }}
+                            />
+                            <Legend />
+                            <Bar dataKey="원금" stackId="a" fill="hsl(221 83% 53%)" radius={[0, 0, 0, 0]} />
+                            <Bar dataKey="이자" stackId="a" fill="hsl(38 92% 50%)" radius={[3, 3, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </Card>
+                    )}
+
                     {/* 대출 조건 */}
                     <Card className="p-6 bg-white">
-                      <h4 className="mb-4">대출 조건</h4>
+                      <h4 className="text-base font-medium mb-4">대출 조건</h4>
                       <div className="space-y-2 text-sm">
                         {selectedProduct.conditions.map((condition, index) => (
                           <div key={index} className="flex items-start gap-2">
@@ -332,7 +394,7 @@ export function LoanCalculator() {
                         <div className="p-2 bg-amber-100 rounded-lg">
                           <Info className="w-5 h-5 text-amber-600" />
                         </div>
-                        <h4>유의사항</h4>
+                        <h4 className="text-base font-medium">유의사항</h4>
                       </div>
                       <div className="space-y-2 text-sm text-muted-foreground">
                         <p>• 본 계산 결과는 참고용이며, 실제 대출 조건은 금융기관과 상담 후 결정됩니다.</p>
@@ -342,13 +404,20 @@ export function LoanCalculator() {
                       </div>
                     </Card>
 
-                    {/* 액션 버튼 */}
+                    {/* WO-03: 액션 버튼 */}
                     <div className="flex gap-4">
-                      <Button size="lg" className="flex-1">
-                        <Wallet className="w-4 h-4 mr-2" />
-                        대출 상담 신청
-                      </Button>
-                      <Button size="lg" variant="outline" className="flex-1">
+                      {/* 대출 상담 신청 — 서비스 준비 중 (disabled) */}
+                      <div className="flex-1 relative group">
+                        <Button size="lg" className="w-full" disabled>
+                          <Wallet className="w-4 h-4 mr-2" />
+                          대출 상담 신청
+                        </Button>
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-foreground text-background text-xs rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                          서비스 준비 중
+                        </div>
+                      </div>
+                      {/* 다른 조건으로 계산 */}
+                      <Button size="lg" variant="outline" className="flex-1" onClick={handleReset}>
                         <Calculator className="w-4 h-4 mr-2" />
                         다른 조건으로 계산
                       </Button>
@@ -362,7 +431,7 @@ export function LoanCalculator() {
                   <div className="p-4 bg-accent rounded-full mb-4">
                     <Calculator className="w-8 h-8 text-muted-foreground" />
                   </div>
-                  <h3 className="mb-2">대출 상품을 선택해주세요</h3>
+                  <h3 className="text-lg font-semibold mb-2">대출 상품을 선택해주세요</h3>
                   <p className="text-muted-foreground">
                     좌측에서 원하시는 대출 상품을 선택하시면
                     <br />
@@ -377,4 +446,3 @@ export function LoanCalculator() {
     </div>
   );
 }
-

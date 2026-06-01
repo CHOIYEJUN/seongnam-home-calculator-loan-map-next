@@ -16,30 +16,28 @@ declare global {
 
 export function KakaoMap({ properties }: KakaoMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const { setSelectedProperty, selectedProperty } = useAppStore();
 
+  // WO-07: setInterval 폴링 제거 → kakao-map-ready 이벤트 방식
   useEffect(() => {
-    // 카카오맵 SDK 로드 대기
-    if (window.kakao && window.kakao.maps) {
-      window.kakao.maps.load(() => {
-        setIsMapLoaded(true);
-      });
-    } else {
-      // SDK가 아직 로드되지 않은 경우 대기
-      const checkKakao = setInterval(() => {
-        if (window.kakao && window.kakao.maps) {
-          clearInterval(checkKakao);
-          window.kakao.maps.load(() => {
-            setIsMapLoaded(true);
-          });
-        }
-      }, 100);
+    const onReady = () => setIsMapLoaded(true);
 
-      return () => clearInterval(checkKakao);
+    if (window.kakao?.maps) {
+      // 이미 로드된 경우
+      onReady();
+    } else {
+      window.addEventListener('kakao-map-ready', onReady);
     }
+
+    return () => {
+      window.removeEventListener('kakao-map-ready', onReady);
+    };
   }, []);
 
+  // WO-01 Effect 1: 지도 + 마커 초기화 (selectedProperty 제거)
   useEffect(() => {
     if (!isMapLoaded || !mapRef.current) return;
 
@@ -50,18 +48,19 @@ export function KakaoMap({ properties }: KakaoMapProps) {
     };
 
     const map = new window.kakao.maps.Map(mapRef.current, mapOption);
+    mapInstanceRef.current = map;
 
     // 마커 생성
     const markers = properties.map((property) => {
       const markerPosition = new window.kakao.maps.LatLng(property.lat, property.lng);
-      
+
       // 커스텀 마커 이미지 설정
-      const imageSrc = property.type === 'apartment' 
+      const imageSrc = property.type === 'apartment'
         ? '/assets/image/icon/apt-pin-icon.png'
         : '/assets/image/icon/opst-pin-icon.png';
       const imageSize = new window.kakao.maps.Size(46, 47);
       const markerImage = new window.kakao.maps.MarkerImage(imageSrc, imageSize);
-      
+
       const marker = new window.kakao.maps.Marker({
         position: markerPosition,
         title: property.name,
@@ -98,17 +97,23 @@ export function KakaoMap({ properties }: KakaoMapProps) {
       return marker;
     });
 
-    // 선택된 매물로 지도 이동
-    if (selectedProperty) {
-      const position = new window.kakao.maps.LatLng(selectedProperty.lat, selectedProperty.lng);
-      map.setCenter(position);
-      map.setLevel(4);
-    }
+    markersRef.current = markers;
 
     return () => {
       markers.forEach(marker => marker.setMap(null));
+      markersRef.current = [];
+      mapInstanceRef.current = null;
     };
-  }, [isMapLoaded, properties, selectedProperty, setSelectedProperty]);
+  }, [isMapLoaded, properties, setSelectedProperty]);
+
+  // WO-01 Effect 2: 선택된 매물로 카메라 이동만
+  useEffect(() => {
+    if (!mapInstanceRef.current || !selectedProperty) return;
+
+    const position = new window.kakao.maps.LatLng(selectedProperty.lat, selectedProperty.lng);
+    mapInstanceRef.current.setCenter(position);
+    mapInstanceRef.current.setLevel(4);
+  }, [selectedProperty]);
 
   return (
     <div ref={mapRef} className="w-full h-full absolute inset-0">
@@ -123,4 +128,3 @@ export function KakaoMap({ properties }: KakaoMapProps) {
     </div>
   );
 }
-

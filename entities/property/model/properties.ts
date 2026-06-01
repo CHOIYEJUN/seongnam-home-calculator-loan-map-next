@@ -2,44 +2,52 @@ import { Property, PropertyUnit } from '@/shared/types/property';
 import propertiesData from './properties.json';
 import pricesData from './prices.json';
 
-interface PropertyData {
+// ──────────────────────────────────────────
+// 새 JSON 구조 (process_excel.py 생성)
+// ──────────────────────────────────────────
+
+interface NewPropertyData {
   id: string;
   name: string;
-  siGunGu: string;
-  roadName: string;
-  bonBeon: number;
-  buBeon: number;
-  floor: number;
+  address: string;
+  roadAddress: string;
   type: 'apartment' | 'officetel';
   lat: number;
   lng: number;
-  constructionYear: number;
+  buildYear: number;
+  units: string[];
 }
 
-interface PriceData {
+interface NewPriceData {
+  id: string;
+  propertyId: string;
   area: number;
+  areaPyeong: number;
+  floor: number;
   officialPrice: number;
   marketPrice: number;
   jeonsePrice: number;
+  monthlyRent?: number;
   lastTransactionDate: string;
+  transactionCount: number;
 }
 
-type PropertiesJson = PropertyData[];
-type PricesJson = Record<string, PriceData[]>;
+// ──────────────────────────────────────────
+// 로더 — 두 JSON 파일을 합쳐서 Property[] 반환
+// ──────────────────────────────────────────
 
-// 주소 생성 함수
-function createAddress(property: PropertyData): string {
-  const address = property.siGunGu;
-  if (property.roadName) {
-    return `${address} ${property.roadName} ${property.bonBeon}${property.buBeon > 0 ? `-${property.buBeon}` : ''}`;
-  }
-  return address;
-}
-
-// 두 JSON 파일을 합쳐서 Property[]로 변환
 export function loadProperties(): Property[] {
-  const properties = propertiesData as PropertiesJson;
-  const prices = pricesData as PricesJson;
+  const properties = propertiesData as NewPropertyData[];
+  const prices = pricesData as NewPriceData[];
+
+  // prices를 propertyId 기준으로 인덱싱
+  const pricesByProperty = new Map<string, NewPriceData[]>();
+  for (const price of prices) {
+    if (!pricesByProperty.has(price.propertyId)) {
+      pricesByProperty.set(price.propertyId, []);
+    }
+    pricesByProperty.get(price.propertyId)!.push(price);
+  }
 
   return properties
     .filter((property) => {
@@ -47,25 +55,27 @@ export function loadProperties(): Property[] {
       return property.lat !== 0 && property.lng !== 0;
     })
     .map((property) => {
-      const priceInfo = prices[property.id] || [];
-      
-      // units 변환
-      const units: PropertyUnit[] = priceInfo.map((price, index) => ({
-        id: `${property.id}-${index + 1}`,
-        propertyId: property.id,
-        area: price.area,
+      const priceList = pricesByProperty.get(property.id) || [];
+
+      const units: PropertyUnit[] = priceList.map((price) => ({
+        id: price.id,
+        propertyId: price.propertyId,
+        area: price.areaPyeong,   // 화면에 평 단위로 표시
+        floor: price.floor,
         officialPrice: price.officialPrice,
         marketPrice: price.marketPrice,
         jeonsePrice: price.jeonsePrice,
+        monthlyRent: price.monthlyRent ?? 0,
       }));
 
       return {
         id: property.id,
         name: property.name,
-        address: createAddress(property),
+        address: property.address,
         type: property.type,
         lat: property.lat,
         lng: property.lng,
+        buildYear: property.buildYear,
         units,
       };
     })
@@ -84,5 +94,3 @@ export function getProperties(): Property[] {
   }
   return cachedProperties;
 }
-
-

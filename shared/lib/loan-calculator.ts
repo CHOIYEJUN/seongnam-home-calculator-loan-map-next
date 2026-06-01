@@ -1,16 +1,21 @@
-import { LoanEstimate } from '../types/property';
-
 /**
- * 전세 대출 한도 및 이자 계산
- * 실제로는 은행 API와 주택공사 데이터를 사용해야 하지만, 
+ * 전세 대출 한도 및 이자 계산 (레거시 유틸 — 현재 미사용)
+ * 실제로는 은행 API와 주택공사 데이터를 사용해야 하지만,
  * 여기서는 일반적인 규칙을 기반으로 예측합니다.
  */
+interface LegacyLoanEstimate {
+  maxLoanAmount: number;
+  interestRate: number;
+  monthlyPayment: number;
+  loanType: string;
+}
+
 export function calculateLoanEstimate(
   jeonsePrice: number,
   marketPrice: number,
   officialPrice: number,
   propertyType: 'apartment' | 'officetel'
-): LoanEstimate {
+): LegacyLoanEstimate {
   // LTV (Loan To Value) 비율 설정
   // 아파트: 최대 80%, 오피스텔: 최대 70%
   const ltvRatio = propertyType === 'apartment' ? 0.80 : 0.70;
