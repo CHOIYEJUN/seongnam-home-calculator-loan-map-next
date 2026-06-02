@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { LoanProduct, LoanCategory, RepaymentMethod } from '@/shared/types/loan';
+import { useState, useEffect, useMemo } from 'react';
+import { LoanProduct, RepaymentMethod, TargetGroup } from '@/shared/types/loan';
 import { loanProducts } from '@/entities/loan/model/loan-products';
 import { calculateLoanRepayment, getRepaymentMethodName } from '@/shared/lib/loan-repayment-calculator';
 import { formatCurrency } from '@/shared/lib/format';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -22,7 +23,8 @@ import {
   Wallet,
   Info,
   ChevronRight,
-  CheckCircle2
+  CheckCircle2,
+  Search,
 } from 'lucide-react';
 import {
   BarChart,
@@ -32,13 +34,61 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer
+  ResponsiveContainer,
 } from 'recharts';
 import { useAppStore } from '@/shared/config/store';
+import { CompareModal } from './compare-modal';
+
+// ── 탭 정의 ────────────────────────────────────────────────────
+const TABS = [
+  { value: 'all',        label: '전체' },
+  { value: 'bank',       label: '은행' },
+  { value: 'government', label: '정부기금' },
+  { value: 'public',     label: '공공임대' },
+] as const;
+
+type TabValue = (typeof TABS)[number]['value'];
+
+// ── 라벨 맵 ────────────────────────────────────────────────────
+const TARGET_GROUP_LABELS: Record<TargetGroup | 'all', string> = {
+  all: '전체',
+  general: '일반',
+  youth: '청년',
+  newlywed: '신혼부부',
+  'multi-child': '다자녀',
+  senior: '고령자',
+};
+
+const RATE_TYPE_BADGE: Record<string, { label: string; cls: string }> = {
+  variable: { label: '변동', cls: 'bg-blue-100 text-blue-700' },
+  fixed:    { label: '고정', cls: 'bg-green-100 text-green-700' },
+  mixed:    { label: '혼합', cls: 'bg-purple-100 text-purple-700' },
+};
+
+const TARGET_BADGE: Record<string, { label: string; cls: string }> = {
+  youth:        { label: '청년',    cls: 'bg-orange-100 text-orange-700' },
+  newlywed:     { label: '신혼부부', cls: 'bg-pink-100 text-pink-700' },
+  'multi-child':{ label: '다자녀',  cls: 'bg-teal-100 text-teal-700' },
+  senior:       { label: '고령자',  cls: 'bg-gray-100 text-gray-700' },
+};
 
 export function LoanCalculator() {
-  const { selectedProperty, selectedUnit, setCurrentView } = useAppStore();
-  const [selectedCategory, setSelectedCategory] = useState<LoanCategory>('bank');
+  const {
+    selectedProperty,
+    selectedUnit,
+    setCurrentView,
+    loanSortKey,
+    setLoanSortKey,
+    loanSearchQuery,
+    setLoanSearchQuery,
+    loanTargetFilter,
+    setLoanTargetFilter,
+    compareProducts,
+    addCompareProduct,
+    removeCompareProduct,
+  } = useAppStore();
+
+  const [selectedTab, setSelectedTab] = useState<TabValue>('all');
   const [selectedProduct, setSelectedProduct] = useState<LoanProduct | null>(null);
   const [loanAmount, setLoanAmount] = useState<number>(0);
   const [loanPeriod, setLoanPeriod] = useState<number>(24);
@@ -51,31 +101,84 @@ export function LoanCalculator() {
     }
   }, [selectedUnit]);
 
-  // 선택된 카테고리의 대출 상품 필터링
-  const filteredProducts = loanProducts.filter(p => p.category === selectedCategory);
+  // ── 필터링 + 정렬 ───────────────────────────────────────────
+  const filteredAndSortedProducts = useMemo(() => {
+    let list = loanProducts.filter((p) => {
+      // 탭 필터
+      if (selectedTab === 'public') {
+        if (p.category !== 'housing' && p.category !== 'public') return false;
+      } else if (selectedTab !== 'all') {
+        if (p.category !== selectedTab) return false;
+      }
+      // 검색
+      if (loanSearchQuery) {
+        const q = loanSearchQuery.toLowerCase();
+        if (!p.provider.toLowerCase().includes(q) && !p.name.toLowerCase().includes(q))
+          return false;
+      }
+      // 대상 그룹 필터
+      if (loanTargetFilter !== 'all') {
+        if (!p.targetGroups.includes(loanTargetFilter as TargetGroup)) return false;
+      }
+      return true;
+    });
 
-  // 대출 계산 결과
+    // 정렬
+    list = [...list].sort((a, b) => {
+      switch (loanSortKey) {
+        case 'rateAsc':     return a.interestRateMin - b.interestRateMin;
+        case 'rateDesc':    return b.interestRateMin - a.interestRateMin;
+        case 'amountDesc':  return b.maxAmount - a.maxAmount;
+        case 'amountAsc':   return a.maxAmount - b.maxAmount;
+        case 'providerAsc': return a.provider.localeCompare(b.provider, 'ko');
+        default:            return 0;
+      }
+    });
+
+    return list;
+  }, [selectedTab, loanSearchQuery, loanTargetFilter, loanSortKey]);
+
+  // ── 추천 상품 (매물 선택 시) ────────────────────────────────
+  const recommendedProducts = useMemo(() => {
+    if (!selectedUnit) return [];
+    return filteredAndSortedProducts
+      .filter(
+        (p) =>
+          (p.category === 'government' || p.category === 'public') &&
+          p.maxAmount >= (selectedUnit.jeonsePrice ?? 0) * 0.5
+      )
+      .slice(0, 2);
+  }, [filteredAndSortedProducts, selectedUnit]);
+
+  // ── 대출 계산 결과 ──────────────────────────────────────────
   const calculation = selectedProduct
     ? calculateLoanRepayment(loanAmount, selectedProduct.interestRate, loanPeriod, repaymentMethod)
     : null;
 
   const handleProductSelect = (product: LoanProduct) => {
     setSelectedProduct(product);
-    // 상품 선택 시 기본값 설정
     setLoanPeriod(product.maxPeriod);
     setRepaymentMethod(product.repaymentMethods[0]);
-    // 대출 한도를 초과하지 않도록 조정
     if (loanAmount > product.maxAmount) {
       setLoanAmount(product.maxAmount);
     }
   };
 
-  // WO-03: 다른 조건으로 계산 — 상품 선택 초기화
   const handleReset = () => {
     setSelectedProduct(null);
     setLoanAmount(selectedUnit ? selectedUnit.jeonsePrice * 0.8 : 0);
     setLoanPeriod(24);
     setRepaymentMethod('maturity');
+  };
+
+  const isInCompare = (id: string) => compareProducts.some((p) => p.id === id);
+
+  const handleCompareToggle = (product: LoanProduct) => {
+    if (isInCompare(product.id)) {
+      removeCompareProduct(product.id);
+    } else {
+      addCompareProduct(product);
+    }
   };
 
   if (!selectedProperty || !selectedUnit) {
@@ -133,60 +236,210 @@ export function LoanCalculator() {
               </p>
             </div>
 
-            <Tabs value={selectedCategory} onValueChange={(v) => setSelectedCategory(v as LoanCategory)}>
-              <div className="px-6 pt-4">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="bank">은행</TabsTrigger>
-                  <TabsTrigger value="housing">주택공사</TabsTrigger>
-                  <TabsTrigger value="government">정부</TabsTrigger>
+            <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as TabValue)}>
+              <div className="px-4 pt-4">
+                <TabsList className="grid w-full grid-cols-4">
+                  {TABS.map((tab) => (
+                    <TabsTrigger key={tab.value} value={tab.value} className="text-xs">
+                      {tab.label}
+                    </TabsTrigger>
+                  ))}
                 </TabsList>
               </div>
 
-              <TabsContent value={selectedCategory} className="mt-0">
-                <ScrollArea className="h-[600px]">
-                  <div className="p-4 space-y-3">
-                    {filteredProducts.map((product) => (
-                      <button
-                        key={product.id}
-                        onClick={() => handleProductSelect(product)}
-                        className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
-                          selectedProduct?.id === product.id
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/50 hover:bg-accent'
-                        }`}
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              {selectedProduct?.id === product.id && (
-                                <CheckCircle2 className="w-5 h-5 text-primary" />
-                              )}
-                              <h4 className="text-base font-medium line-clamp-1">{product.name}</h4>
-                            </div>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {product.provider}
-                            </p>
-                            <div className="flex items-center gap-3 mt-3">
-                              <div className="px-3 py-1 bg-primary/10 rounded-full">
-                                <span className="text-primary">
-                                  {product.interestRate}%
-                                </span>
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                최대 {formatCurrency(product.maxAmount)}
-                              </div>
-                            </div>
-                          </div>
-                          <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 ml-2" />
-                        </div>
-                        <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
-                          {product.description}
-                        </p>
-                      </button>
-                    ))}
+              {/* 검색 + 정렬 + 필터 바 */}
+              <div className="px-4 py-3 space-y-2 border-b">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      placeholder="은행명 검색..."
+                      className="pl-8"
+                      value={loanSearchQuery}
+                      onChange={(e) => setLoanSearchQuery(e.target.value)}
+                    />
                   </div>
-                </ScrollArea>
-              </TabsContent>
+                  <Select
+                    value={loanSortKey}
+                    onValueChange={(v) =>
+                      setLoanSortKey(
+                        v as 'rateAsc' | 'rateDesc' | 'amountDesc' | 'amountAsc' | 'providerAsc'
+                      )
+                    }
+                  >
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="rateAsc">금리 낮은 순</SelectItem>
+                      <SelectItem value="rateDesc">금리 높은 순</SelectItem>
+                      <SelectItem value="amountDesc">한도 큰 순</SelectItem>
+                      <SelectItem value="amountAsc">한도 작은 순</SelectItem>
+                      <SelectItem value="providerAsc">기관명 순</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* 대상 그룹 필터 */}
+                <div className="flex gap-1.5 flex-wrap">
+                  {(
+                    ['all', 'general', 'youth', 'newlywed', 'multi-child', 'senior'] as const
+                  ).map((g) => (
+                    <button
+                      key={g}
+                      onClick={() => setLoanTargetFilter(g)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                        loanTargetFilter === g
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      }`}
+                    >
+                      {TARGET_GROUP_LABELS[g]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 탭 콘텐츠 */}
+              {TABS.map((tab) => (
+                <TabsContent key={tab.value} value={tab.value} className="mt-0">
+                  <ScrollArea className="h-[520px]">
+                    <div className="p-4 space-y-3">
+                      {/* 추천 배너 */}
+                      {recommendedProducts.length > 0 && selectedTab === tab.value && (
+                        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                          <p className="text-sm font-medium text-amber-800 mb-1.5">
+                            💡 이 매물에 적합한 저금리 상품
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {recommendedProducts.map((p) => (
+                              <button
+                                key={p.id}
+                                onClick={() => handleProductSelect(p)}
+                                className="text-xs px-2.5 py-1 bg-white border border-amber-300 rounded-full hover:bg-amber-50 transition-colors"
+                              >
+                                {p.name} ({p.interestRateMin}%)
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 검색 결과 없음 */}
+                      {filteredAndSortedProducts.length === 0 && (
+                        <div className="p-8 text-center text-muted-foreground">
+                          <Search className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                          <p>검색 결과가 없습니다</p>
+                          <button
+                            onClick={() => {
+                              setLoanSearchQuery('');
+                              setLoanTargetFilter('all');
+                            }}
+                            className="mt-2 text-primary text-sm underline"
+                          >
+                            필터 초기화
+                          </button>
+                        </div>
+                      )}
+
+                      {/* 상품 카드 목록 */}
+                      {filteredAndSortedProducts.map((product) => {
+                        const rateTypeBadge = RATE_TYPE_BADGE[product.interestRateType];
+                        const inCompare = isInCompare(product.id);
+                        const compareDisabled = !inCompare && compareProducts.length >= 3;
+
+                        return (
+                          <div
+                            key={product.id}
+                            className={`relative rounded-lg border-2 transition-all ${
+                              selectedProduct?.id === product.id
+                                ? 'border-primary bg-primary/5'
+                                : 'border-border hover:border-primary/50 hover:bg-accent'
+                            }`}
+                          >
+                            {/* 비교 체크박스 */}
+                            <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+                              <label className="flex items-center gap-1 cursor-pointer select-none">
+                                <Checkbox
+                                  checked={inCompare}
+                                  disabled={compareDisabled}
+                                  onCheckedChange={() => handleCompareToggle(product)}
+                                  className="data-[state=checked]:bg-primary"
+                                />
+                                <span className="text-xs text-muted-foreground">비교</span>
+                              </label>
+                            </div>
+
+                            <button
+                              onClick={() => handleProductSelect(product)}
+                              className="w-full text-left p-4 pr-20"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    {selectedProduct?.id === product.id && (
+                                      <CheckCircle2 className="w-4 h-4 text-primary flex-shrink-0" />
+                                    )}
+                                    <h4 className="text-sm font-semibold leading-tight line-clamp-1">
+                                      {product.name}
+                                    </h4>
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {product.provider}
+                                  </p>
+
+                                  {/* 배지 행 */}
+                                  <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                                    {/* 금리 유형 배지 */}
+                                    {rateTypeBadge && (
+                                      <span
+                                        className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${rateTypeBadge.cls}`}
+                                      >
+                                        {rateTypeBadge.label}
+                                      </span>
+                                    )}
+                                    {/* 대상 그룹 배지 (general 제외) */}
+                                    {product.targetGroups
+                                      .filter((g) => g !== 'general')
+                                      .map((g) => {
+                                        const badge = TARGET_BADGE[g];
+                                        if (!badge) return null;
+                                        return (
+                                          <span
+                                            key={g}
+                                            className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${badge.cls}`}
+                                          >
+                                            {badge.label}
+                                          </span>
+                                        );
+                                      })}
+                                  </div>
+
+                                  {/* 금리 범위 + 한도 */}
+                                  <div className="flex items-center gap-3 mt-2">
+                                    <div className="px-2.5 py-1 bg-primary/10 rounded-full">
+                                      <span className="text-primary text-xs font-semibold">
+                                        {product.interestRateMin}% ~ {product.interestRateMax}%
+                                      </span>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      최대 {formatCurrency(product.maxAmount)}
+                                    </div>
+                                  </div>
+                                </div>
+                                <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 ml-2 mt-1" />
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-2 line-clamp-1">
+                                {product.description}
+                              </p>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </ScrollArea>
+                </TabsContent>
+              ))}
             </Tabs>
           </Card>
 
@@ -204,7 +457,6 @@ export function LoanCalculator() {
                       <Label>대출 금액</Label>
                       <div className="flex gap-3">
                         <div className="flex-1">
-                          {/* WO-10: min=0, max, 음수 방어 */}
                           <Input
                             type="number"
                             value={loanAmount}
@@ -212,7 +464,10 @@ export function LoanCalculator() {
                             max={selectedProduct.maxAmount}
                             step={1000000}
                             onChange={(e) => {
-                              const val = Math.max(0, Math.min(Number(e.target.value), selectedProduct.maxAmount));
+                              const val = Math.max(
+                                0,
+                                Math.min(Number(e.target.value), selectedProduct.maxAmount)
+                              );
                               setLoanAmount(val);
                             }}
                           />
@@ -238,7 +493,10 @@ export function LoanCalculator() {
                         </SelectTrigger>
                         <SelectContent>
                           {Array.from(
-                            { length: (selectedProduct.maxPeriod - selectedProduct.minPeriod) / 12 + 1 },
+                            {
+                              length:
+                                (selectedProduct.maxPeriod - selectedProduct.minPeriod) / 12 + 1,
+                            },
                             (_, i) => selectedProduct.minPeriod + i * 12
                           ).map((months) => (
                             <SelectItem key={months} value={String(months)}>
@@ -259,10 +517,7 @@ export function LoanCalculator() {
                         {selectedProduct.repaymentMethods.map((method) => (
                           <div key={method} className="flex items-center space-x-2">
                             <RadioGroupItem value={method} id={method} />
-                            <label
-                              htmlFor={method}
-                              className="flex-1 cursor-pointer"
-                            >
+                            <label htmlFor={method} className="flex-1 cursor-pointer">
                               <div className="flex items-center justify-between p-3 rounded-md hover:bg-accent transition-colors">
                                 <span>{getRepaymentMethodName(method)}</span>
                                 <span className="text-sm text-muted-foreground">
@@ -277,14 +532,19 @@ export function LoanCalculator() {
                       </RadioGroup>
                     </div>
 
-                    {/* 금리 정보 — WO-05: primary 토큰 사용 */}
+                    {/* 금리 정보 */}
                     <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
                         <TrendingUp className="w-5 h-5 text-primary" />
-                        <span>적용 금리</span>
+                        <span>적용 금리 범위</span>
                       </div>
                       <p className="text-2xl text-primary">
-                        {selectedProduct.interestRate}% <span className="text-base">연</span>
+                        {selectedProduct.interestRateMin}%
+                        <span className="text-base"> ~ {selectedProduct.interestRateMax}%</span>
+                        <span className="text-base ml-1">연</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        계산은 최저금리({selectedProduct.interestRateMin}%) 기준으로 표시됩니다
                       </p>
                     </div>
                   </div>
@@ -293,7 +553,6 @@ export function LoanCalculator() {
                 {/* 계산 결과 */}
                 {calculation && (
                   <>
-                    {/* WO-05: 그라디언트 카드 — primary 토큰 */}
                     <Card className="p-6 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground">
                       <div className="flex items-center gap-3 mb-6">
                         <div className="p-3 bg-white/20 rounded-lg">
@@ -313,8 +572,7 @@ export function LoanCalculator() {
                       <p className="text-primary-foreground/70">
                         {repaymentMethod === 'maturity'
                           ? '매월 이자만 납부 (만기에 원금 상환)'
-                          : '매월 납부액'
-                        }
+                          : '매월 납부액'}
                       </p>
                     </Card>
 
@@ -337,7 +595,7 @@ export function LoanCalculator() {
                       </Card>
                     </div>
 
-                    {/* WO-11: 월별 상환 스케줄 Bar Chart */}
+                    {/* 월별 상환 스케줄 Bar Chart */}
                     {calculation.schedule && calculation.schedule.length > 0 && (
                       <Card className="p-6 bg-white">
                         <h3 className="text-lg font-semibold mb-4">월별 상환 스케줄</h3>
@@ -364,7 +622,7 @@ export function LoanCalculator() {
                               tickFormatter={(v: number) => `${v}만`}
                             />
                             <Tooltip
-                              formatter={(value: number | undefined) => [`${value || 0}만원`]}
+                              formatter={(value: number | undefined) => [`${value ?? 0}만원`]}
                               labelStyle={{ fontWeight: 600 }}
                             />
                             <Legend />
@@ -404,9 +662,8 @@ export function LoanCalculator() {
                       </div>
                     </Card>
 
-                    {/* WO-03: 액션 버튼 */}
+                    {/* 액션 버튼 */}
                     <div className="flex gap-4">
-                      {/* 대출 상담 신청 — 서비스 준비 중 (disabled) */}
                       <div className="flex-1 relative group">
                         <Button size="lg" className="w-full" disabled>
                           <Wallet className="w-4 h-4 mr-2" />
@@ -416,7 +673,6 @@ export function LoanCalculator() {
                           서비스 준비 중
                         </div>
                       </div>
-                      {/* 다른 조건으로 계산 */}
                       <Button size="lg" variant="outline" className="flex-1" onClick={handleReset}>
                         <Calculator className="w-4 h-4 mr-2" />
                         다른 조건으로 계산
@@ -443,6 +699,9 @@ export function LoanCalculator() {
           </div>
         </div>
       </div>
+
+      {/* 비교 모달 (플로팅 바 + Dialog) */}
+      <CompareModal />
     </div>
   );
 }

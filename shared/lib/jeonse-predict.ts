@@ -47,8 +47,7 @@ export async function predictJeonsePrice(
   }
 
   const data: JeonsePredictResponse = await res.json();
-  const ratio = data.predicted_jeonse_price ?? 0;
-  // 매매가(만원) → 원 단위로 변환 후 비율 적용
-  const salePriceWon = params.salePrice * 10000;
-  return Math.round(salePriceWon * ratio);
+  // API는 predicted_jeonse_price를 만원 단위로 반환 → 원 단위로 변환
+  const predictedMan = data.predicted_jeonse_price ?? 0;
+  return Math.round(predictedMan * 10000);
 }
