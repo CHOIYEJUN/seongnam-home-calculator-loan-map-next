@@ -42,6 +42,16 @@ def sqm_to_pyeong(sqm: float) -> float:
     return round(float(sqm) * 0.3025, 1)
 
 
+def sqm_to_pyeong_group(sqm: float) -> int:
+    """
+    ㎡ → 평형 그룹 (정수 반올림)
+    예) 30.2평, 30.4평, 30.8평 → 모두 30평형으로 통합
+    실제 아파트 공급면적 기준으로 ±2평 이내는 같은 평형으로 취급
+    """
+    pyeong = float(sqm) * 0.3025
+    return round(pyeong)
+
+
 def parse_price(price_val) -> Optional[int]:
     """'263,000' 또는 263000.0 → 2630000000 (원). 유효하지 않으면 None."""
     if price_val is None:
@@ -67,11 +77,13 @@ def make_property_id(name: str, sigungu: str, ptype: str) -> str:
     return f'{prefix}-{clean_name}-{district}'
 
 
-def make_unit_id(property_id: str, area_sqm: float, floor: int) -> str:
-    """유닛 ID: {property_id}-{면적sqm}㎡{floor}층"""
-    # 소수점 이하가 0이면 정수로, 아니면 소수점 4자리까지
-    area_str = f'{area_sqm:.4f}'.rstrip('0').rstrip('.')
-    return f'{property_id}-{area_str}sqm{floor}f'
+def make_unit_id(property_id: str, area_sqm: float) -> str:
+    """
+    유닛 ID: {property_id}-{평형그룹}평형
+    층수를 제외하고 면적만으로 그룹핑 → 같은 단지의 30.2/30.4/30.8평 → 모두 30평형으로 통합
+    """
+    pyeong_group = sqm_to_pyeong_group(area_sqm)
+    return f'{property_id}-{pyeong_group}평형'
 
 
 def to_str(val) -> str:
@@ -199,20 +211,17 @@ def aggregate(
 
         prop_id = make_property_id(name, sigungu, ptype)
         area_pyeong = sqm_to_pyeong(area_sqm)
-        unit_id = make_unit_id(prop_id, area_sqm, floor)
+        pyeong_group = sqm_to_pyeong_group(area_sqm)
+        unit_id = make_unit_id(prop_id, area_sqm)
 
         # property 등록
         if prop_id not in buildings:
-            # 주소 조합
-            address = sigungu  # "경기도 성남시 분당구 서현동"
-            # 도로명 주소: 시군구에서 동 제외한 부분 + 도로명
+            address = sigungu
             addr_parts = sigungu.rsplit(' ', 1)
             road_address = f'{addr_parts[0]} {road}'.strip() if road else address
 
-            # 기존 좌표 조회 (name + sigungu 기준)
             coord_key = f'{name}|{sigungu}'
             lat, lng = existing_coord_map.get(coord_key, (0.0, 0.0))
-            # 새 ID로도 조회 시도
             if lat == 0.0 and lng == 0.0:
                 lat, lng = existing_coord_map.get(prop_id, (0.0, 0.0))
 
@@ -228,14 +237,13 @@ def aggregate(
                 'units': [],
             }
 
-        # unit 등록
+        # unit 등록 (평형 그룹 기준 — 30.2/30.4/30.8평 모두 30평형으로 합산)
         if unit_id not in units:
             units[unit_id] = {
                 'id': unit_id,
                 'propertyId': prop_id,
-                'area': area_sqm,
-                'areaPyeong': area_pyeong,
-                'floor': floor,
+                'area': area_sqm,          # 대표 실거래 면적 (첫 번째 거래값)
+                'areaPyeong': float(pyeong_group),  # 그룹 평형 (정수)
                 'officialPrice': 0,
                 '_marketPrices': [],
                 '_jeonsePrices': [],
@@ -265,7 +273,7 @@ def aggregate(
         monthly = parse_price(row.get('월세금(만원)'))
 
         prop_id = make_property_id(name, sigungu, ptype)
-        unit_id = make_unit_id(prop_id, area_sqm, floor)
+        unit_id = make_unit_id(prop_id, area_sqm)
 
         if unit_id not in units:
             continue  # 매매 데이터가 없는 유닛은 스킵
