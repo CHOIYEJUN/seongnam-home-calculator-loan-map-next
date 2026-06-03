@@ -75,6 +75,12 @@ export function PropertyPanel() {
               <MapPin className="w-4 h-4" />
               <p className="text-sm">{selectedProperty.address}</p>
             </div>
+            {selectedProperty.roadAddress && selectedProperty.roadAddress !== selectedProperty.address && (
+              <div className="flex items-center gap-1 mt-1 opacity-80">
+                <MapPin className="w-3.5 h-3.5" />
+                <p className="text-xs">{selectedProperty.roadAddress}</p>
+              </div>
+            )}
           </div>
           <Badge variant="secondary" className="ml-2">
             {selectedProperty.type === 'apartment' ? '아파트' : '오피스텔'}
@@ -122,15 +128,29 @@ export function PropertyPanel() {
                 <Card className="p-3 bg-accent/30">
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">시세</span>
-                    <span>{formatCurrency(selectedUnit.marketPrice)}</span>
+                    <div className="text-right">
+                      <div>{formatCurrency(selectedUnit.marketPrice)}</div>
+                      {selectedUnit.lastSaleDate && (
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {selectedUnit.lastSaleDate} 거래 기준
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </Card>
                 <Card className="p-3 bg-primary/10 border-primary/20">
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">전세가</span>
-                    <span className="text-primary">
-                      {formatCurrency(selectedUnit.jeonsePrice)}
-                    </span>
+                    <div className="text-right">
+                      <div className="text-primary">
+                        {formatCurrency(selectedUnit.jeonsePrice)}
+                      </div>
+                      {selectedUnit.lastJeonseDate && (
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {selectedUnit.lastJeonseDate} 거래 기준
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </Card>
                 <Card className="p-3 bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800">

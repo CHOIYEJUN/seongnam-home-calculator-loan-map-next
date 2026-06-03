@@ -37,16 +37,20 @@ async function updateCoordinates() {
     process.exit(1);
   }
 
+  const force = process.argv.includes('--force');
   const propertiesPath = path.join(process.cwd(), 'entities/property/model/properties.json');
   const properties: PropertyData[] = JSON.parse(fs.readFileSync(propertiesPath, 'utf-8'));
 
-  // 좌표가 없는 매물만 업데이트 대상
-  const targets = properties.filter(p => p.lat === 0 || p.lng === 0);
+  // --force: 전체 재검색 / 기본: 좌표 없는 것만
+  const targets = force
+    ? properties
+    : properties.filter(p => p.lat === 0 || p.lng === 0);
 
   if (targets.length === 0) {
-    console.log('✅ 모든 매물에 좌표가 있습니다. 업데이트 불필요.');
+    console.log('✅ 모든 매물에 좌표가 있습니다. 업데이트 불필요. (--force로 전체 재검색 가능)');
     return;
   }
+  if (force) console.log('⚡ --force 모드: 전체 좌표 재검색');
 
   console.log(`📍 좌표 없는 매물 ${targets.length}개 / 전체 ${properties.length}개 업데이트...\n`);
 
@@ -63,29 +67,69 @@ async function updateCoordinates() {
     try {
       console.log(`${progress} 🔍 검색 중: ${property.name}...`);
 
-      // 도로명 주소에서 번지 추출: "경기도 성남시 분당구 중앙공원로 53" → street="중앙공원로 53"
-      let street = '';
-      if (property.roadAddress) {
-        const parts = property.roadAddress.replace(/^경기도\s*성남시\s*\S+구\s*/, '').trim();
-        street = parts;
-      }
-
-      // 동 주소 파싱: "경기도 성남시 분당구 서현동" → city=성남시, district=서현동
+      const cleanName = property.name.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
+      const guMatch = property.address.match(/(분당구|수정구|중원구)/);
+      const gu = guMatch ? guMatch[1] : '성남시';
       const dongMatch = property.address.match(/(\S+동|\S+읍|\S+면)$/);
       const dong = dongMatch ? dongMatch[1] : '';
 
       let result: { lat: number; lng: number; address: string } | null = null;
 
-      // 1순위: Nominatim — 도로명 주소 검색
-      if (street) {
+      // 1순위: 단지명 + 구 + 아파트/오피스텔 — 건물명 검색이 도로 검색보다 정확
+      const nameQueries = [
+        `${property.name} ${gu} 성남시`,
+        `${cleanName} ${gu} 성남시`,
+        `${cleanName} ${dong} 성남시`,
+      ];
+      for (const q of nameQueries) {
+        if (result) break;
         try {
-          const params = new URLSearchParams({
-            street,
-            city: '성남시',
-            country: 'kr',
-            format: 'json',
-            limit: '1',
-          });
+          const params = new URLSearchParams({ q, format: 'json', limit: '3', countrycodes: 'kr', addressdetails: '1' });
+          const response = await fetch(
+            `https://nominatim.openstreetmap.org/search?${params}`,
+            { headers: { 'User-Agent': 'seongnam-jeonse-app/1.0' } }
+          );
+          if (response.ok) {
+            const data = await response.json();
+            // 건물(building) 타입 결과 우선, 없으면 첫 번째 결과 사용
+            const building = data.find((d: any) => d.addresstype === 'building' || d.type === 'apartments' || d.type === 'residential') || data[0];
+            if (building) {
+              result = { lat: parseFloat(building.lat), lng: parseFloat(building.lon), address: property.address };
+            }
+          }
+        } catch (_) { /* 다음 시도 */ }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+
+      // 2순위: Kakao 키워드 검색 (심사 통과 시 자동 작동 — 가장 정확)
+      if (!result && apiKey) {
+        const kakaoQueries = [
+          `성남시 ${property.name}`,
+          `성남시 ${cleanName}`,
+        ];
+        for (const q of kakaoQueries) {
+          if (result) break;
+          try {
+            const response = await fetch(
+              `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(q)}&category_group_code=AT4`,
+              { headers: { Authorization: `KakaoAK ${apiKey}` } }
+            );
+            if (response.ok) {
+              const data = await response.json();
+              if (data.documents?.length > 0) {
+                const doc = data.documents[0];
+                result = { lat: parseFloat(doc.y), lng: parseFloat(doc.x), address: doc.address_name };
+              }
+            }
+          } catch (_) { /* 다음 시도 */ }
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+      }
+
+      // 3순위: 도로명 주소 검색 (주소 보간이라 덜 정확하지만 fallback으로 사용)
+      if (!result && property.roadAddress) {
+        try {
+          const params = new URLSearchParams({ q: property.roadAddress, format: 'json', limit: '1', countrycodes: 'kr' });
           const response = await fetch(
             `https://nominatim.openstreetmap.org/search?${params}`,
             { headers: { 'User-Agent': 'seongnam-jeonse-app/1.0' } }
@@ -98,45 +142,6 @@ async function updateCoordinates() {
           }
         } catch (_) { /* 다음 시도 */ }
         await new Promise((resolve) => setTimeout(resolve, 200));
-      }
-
-      // 2순위: Nominatim — 동 + 단지명 자유 검색
-      if (!result) {
-        const cleanName = property.name.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
-        const q = `${cleanName} ${dong} 성남시`;
-        try {
-          const params = new URLSearchParams({ q, format: 'json', limit: '1', countrycodes: 'kr' });
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?${params}`,
-            { headers: { 'User-Agent': 'seongnam-jeonse-app/1.0' } }
-          );
-          if (response.ok) {
-            const data = await response.json();
-            if (data.length > 0) {
-              result = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), address: property.address };
-            }
-          }
-        } catch (_) { /* 다음 시도 */ }
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      }
-
-      // 3순위: Kakao API — 심사 완료 후 자동 활성화
-      if (!result && apiKey) {
-        const kakaoQuery = property.roadAddress || property.address;
-        try {
-          const response = await fetch(
-            `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(kakaoQuery)}`,
-            { headers: { Authorization: `KakaoAK ${apiKey}` } }
-          );
-          if (response.ok) {
-            const data = await response.json();
-            if (data.documents?.length > 0) {
-              const doc = data.documents[0];
-              result = { lat: parseFloat(doc.y), lng: parseFloat(doc.x), address: doc.address_name };
-            }
-          }
-        } catch (_) { /* 다음 시도 */ }
-        await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
       const idx = propMap.get(property.id);

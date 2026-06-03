@@ -23,12 +23,14 @@ interface NewPriceData {
   propertyId: string;
   area: number;
   areaPyeong: number;
-  floor: number;
+  floor?: number;             // 평형 그룹핑 후 제거됨 → optional
   officialPrice: number;
   marketPrice: number;
   jeonsePrice: number;
   monthlyRent?: number;
-  lastTransactionDate: string;
+  lastTransactionDate?: string;
+  lastSaleDate?: string;      // 최신 매매 거래일
+  lastJeonseDate?: string;    // 최신 전세 거래일
   transactionCount: number;
 }
 
@@ -60,18 +62,20 @@ export function loadProperties(): Property[] {
       const units: PropertyUnit[] = priceList.map((price) => ({
         id: price.id,
         propertyId: price.propertyId,
-        area: price.areaPyeong,   // 화면에 평 단위로 표시
-        floor: price.floor,
+        area: price.areaPyeong,
         officialPrice: price.officialPrice,
         marketPrice: price.marketPrice,
         jeonsePrice: price.jeonsePrice,
         monthlyRent: price.monthlyRent ?? 0,
+        lastSaleDate: price.lastSaleDate || price.lastTransactionDate,
+        lastJeonseDate: price.lastJeonseDate,
       }));
 
       return {
         id: property.id,
         name: property.name,
         address: property.address,
+        roadAddress: property.roadAddress,
         type: property.type,
         lat: property.lat,
         lng: property.lng,

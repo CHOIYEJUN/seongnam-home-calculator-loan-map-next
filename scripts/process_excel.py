@@ -242,21 +242,21 @@ def aggregate(
             units[unit_id] = {
                 'id': unit_id,
                 'propertyId': prop_id,
-                'area': area_sqm,          # 대표 실거래 면적 (첫 번째 거래값)
-                'areaPyeong': float(pyeong_group),  # 그룹 평형 (정수)
+                'area': area_sqm,
+                'areaPyeong': float(pyeong_group),
                 'officialPrice': 0,
                 '_marketPrices': [],
                 '_jeonsePrices': [],
                 '_monthlyRents': [],
-                'lastTransactionDate': year_month,
+                '_lastSaleDate': year_month,
+                '_lastJeonseDate': '',
             }
             if unit_id not in buildings[prop_id]['units']:
                 buildings[prop_id]['units'].append(unit_id)
 
         units[unit_id]['_marketPrices'].append(price)
-        # 최신 거래일 갱신
-        if to_str(year_month) > to_str(units[unit_id]['lastTransactionDate']):
-            units[unit_id]['lastTransactionDate'] = year_month
+        if to_str(year_month) > to_str(units[unit_id]['_lastSaleDate']):
+            units[unit_id]['_lastSaleDate'] = year_month
 
     # ── 2. 전월세 데이터로 전세가/월세 집계 ──
     for row in jeonse_rows:
@@ -266,8 +266,8 @@ def aggregate(
 
         sigungu = to_str(row.get('시군구', ''))
         area_sqm = to_float(row.get('전용면적(㎡)', 0))
-        floor = to_int(row.get('층', 1), default=1)
         contract_type = to_str(row.get('전월세구분', ''))
+        year_month = to_str(row.get('계약년월', ''))
 
         deposit = parse_price(row.get('보증금(만원)'))
         monthly = parse_price(row.get('월세금(만원)'))
@@ -276,31 +276,36 @@ def aggregate(
         unit_id = make_unit_id(prop_id, area_sqm)
 
         if unit_id not in units:
-            continue  # 매매 데이터가 없는 유닛은 스킵
+            continue
 
         if contract_type == '전세' and deposit:
             units[unit_id]['_jeonsePrices'].append(deposit)
+            if to_str(year_month) > to_str(units[unit_id]['_lastJeonseDate']):
+                units[unit_id]['_lastJeonseDate'] = year_month
         elif contract_type == '월세' and monthly:
             units[unit_id]['_monthlyRents'].append(monthly)
 
     # ── 3. 집계 → 최종 prices 생성 ──
+    def fmt_date(ym: str) -> str:
+        ym = to_str(ym)
+        return f'{ym[:4]}-{ym[4:6]}' if len(ym) == 6 and ym.isdigit() else ym
+
     prices = []
     for unit_id, unit in units.items():
         market_prices = unit.pop('_marketPrices', [])
         jeonse_prices = unit.pop('_jeonsePrices', [])
         monthly_rents = unit.pop('_monthlyRents', [])
+        last_sale   = unit.pop('_lastSaleDate', '')
+        last_jeonse = unit.pop('_lastJeonseDate', '')
 
         unit['marketPrice'] = int(statistics.median(market_prices)) if market_prices else 0
         unit['jeonsePrice'] = int(statistics.median(jeonse_prices)) if jeonse_prices else 0
         unit['monthlyRent'] = int(statistics.median(monthly_rents)) if monthly_rents else 0
         unit['transactionCount'] = len(market_prices)
-
-        # lastTransactionDate: YYYYMM → "YYYY-MM" 형식
-        ldt = to_str(unit.get('lastTransactionDate', ''))
-        if len(ldt) == 6 and ldt.isdigit():
-            unit['lastTransactionDate'] = f'{ldt[:4]}-{ldt[4:6]}'
-        else:
-            unit['lastTransactionDate'] = ldt
+        unit['lastSaleDate']   = fmt_date(last_sale)
+        unit['lastJeonseDate'] = fmt_date(last_jeonse)
+        # 하위 호환: 최신 날짜를 lastTransactionDate로도 유지
+        unit['lastTransactionDate'] = fmt_date(last_sale) if last_sale else fmt_date(last_jeonse)
 
         prices.append(unit)
 
