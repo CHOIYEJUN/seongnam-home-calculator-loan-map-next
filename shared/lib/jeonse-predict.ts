@@ -2,7 +2,7 @@
 const PREDICT_ENDPOINT =
   typeof window !== 'undefined'
     ? '/api/jeonse-predict'
-    : (process.env.JEONSE_PREDICT_API ?? 'http://localhost:8000') + '/predict';
+    : (process.env.JEONSE_PREDICT_API ?? 'https://web-production-e962b7.up.railway.app') + '/predict';
 
 export interface JeonsePredictRequest {
   /** 매매가(시세) 만원 단위 */

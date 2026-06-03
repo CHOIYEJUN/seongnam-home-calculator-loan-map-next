@@ -266,7 +266,7 @@ ML 백엔드(FastAPI)로 전세가 예측 요청을 프록시.
 ```
 
 **환경 변수**:
-- `JEONSE_PREDICT_API`: ML 백엔드 URL (기본: `http://localhost:8000`)
+- `JEONSE_PREDICT_API`: ML 백엔드 URL 
 
 ---
 
