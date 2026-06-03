@@ -192,48 +192,36 @@ export function LoanCalculator() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-primary/5">
-      <div className="max-w-7xl mx-auto p-6">
+    <div className="h-full bg-gradient-to-br from-slate-50 to-primary/5 overflow-auto">
+      <div className="max-w-7xl mx-auto p-4">
         {/* 헤더 */}
-        <div className="mb-6">
-          <Button variant="ghost" onClick={() => setCurrentView('map')} className="mb-4">
+        <div className="mb-3">
+          <Button variant="ghost" onClick={() => setCurrentView('map')} className="mb-3">
             <ArrowLeft className="w-4 h-4 mr-2" />
             지도로 돌아가기
           </Button>
 
-          <Card className="p-6 bg-white">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">{selectedProperty.name}</h2>
-                <p className="text-muted-foreground mt-1">{selectedProperty.address}</p>
-                <div className="flex items-center gap-4 mt-3">
-                  <div className="flex items-center gap-2">
-                    <Home className="w-4 h-4 text-muted-foreground" />
-                    <span>{selectedUnit.area}평</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-muted-foreground" />
-                    <span>{selectedProperty.type === 'apartment' ? '아파트' : '오피스텔'}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-muted-foreground">전세가</p>
-                <p className="text-primary mt-1">{formatCurrency(selectedUnit.jeonsePrice)}</p>
-              </div>
+          <div className="flex items-center justify-between bg-white rounded-lg border px-4 py-2.5 text-sm">
+            <div className="flex items-center gap-3">
+              <span className="font-semibold text-base">{selectedProperty.name}</span>
+              <span className="text-muted-foreground">{selectedUnit.area}평</span>
+              <span className="text-xs px-2 py-0.5 bg-muted rounded-full">
+                {selectedProperty.type === 'apartment' ? '아파트' : '오피스텔'}
+              </span>
             </div>
-          </Card>
+            <div className="flex items-center gap-3">
+              <span className="text-muted-foreground text-xs">전세가</span>
+              <span className="font-semibold text-primary">{formatCurrency(selectedUnit.jeonsePrice)}</span>
+            </div>
+          </div>
         </div>
 
         {/* 메인 컨텐츠 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           {/* 왼쪽: 대출 상품 선택 */}
           <Card className="lg:col-span-1 bg-white">
-            <div className="p-6 border-b">
-              <h3 className="text-lg font-semibold">대출 상품 선택</h3>
-              <p className="text-muted-foreground text-sm mt-1">
-                원하시는 대출 상품을 선택해주세요
-              </p>
+            <div className="px-4 py-3 border-b">
+              <h3 className="text-sm font-semibold">대출 상품 선택</h3>
             </div>
 
             <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as TabValue)}>
@@ -303,7 +291,7 @@ export function LoanCalculator() {
               {/* 탭 콘텐츠 */}
               {TABS.map((tab) => (
                 <TabsContent key={tab.value} value={tab.value} className="mt-0">
-                  <ScrollArea className="h-[520px]">
+                  <ScrollArea className="h-[calc(100vh-280px)]">
                     <div className="p-4 space-y-3">
                       {/* 추천 배너 */}
                       {recommendedProducts.length > 0 && selectedTab === tab.value && (
@@ -358,7 +346,7 @@ export function LoanCalculator() {
                             }`}
                           >
                             {/* 비교 체크박스 */}
-                            <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+                            <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10">
                               <label className="flex items-center gap-1 cursor-pointer select-none">
                                 <Checkbox
                                   checked={inCompare}
@@ -372,7 +360,7 @@ export function LoanCalculator() {
 
                             <button
                               onClick={() => handleProductSelect(product)}
-                              className="w-full text-left p-4 pr-20"
+                              className="w-full text-left p-3 pr-16"
                             >
                               <div className="flex items-start justify-between">
                                 <div className="flex-1 min-w-0">
@@ -444,108 +432,94 @@ export function LoanCalculator() {
           </Card>
 
           {/* 오른쪽: 대출 조건 및 계산 결과 */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-3">
             {selectedProduct ? (
               <>
                 {/* 대출 조건 설정 */}
-                <Card className="p-6 bg-white">
-                  <h3 className="text-lg font-semibold mb-6">대출 조건 설정</h3>
+                <Card className="p-4 bg-white">
+                  <h3 className="text-sm font-semibold mb-3">대출 조건 설정</h3>
 
-                  <div className="space-y-6">
-                    {/* 대출 금액 */}
-                    <div className="space-y-2">
-                      <Label>대출 금액</Label>
-                      <div className="flex gap-3">
-                        <div className="flex-1">
-                          <Input
-                            type="number"
-                            value={loanAmount}
-                            min={0}
-                            max={selectedProduct.maxAmount}
-                            step={1000000}
-                            onChange={(e) => {
-                              const val = Math.max(
-                                0,
-                                Math.min(Number(e.target.value), selectedProduct.maxAmount)
-                              );
-                              setLoanAmount(val);
-                            }}
-                          />
-                        </div>
-                        <div className="flex items-center px-4 bg-accent rounded-md">
-                          <span>{formatCurrency(loanAmount)}</span>
-                        </div>
+                  <div className="space-y-3">
+                    {/* 대출 금액 + 기간 가로 배치 */}
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* 대출 금액 */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">대출 금액</Label>
+                        <Input
+                          type="number"
+                          value={loanAmount}
+                          min={0}
+                          max={selectedProduct.maxAmount}
+                          step={1000000}
+                          onChange={(e) => {
+                            const val = Math.max(
+                              0,
+                              Math.min(Number(e.target.value), selectedProduct.maxAmount)
+                            );
+                            setLoanAmount(val);
+                          }}
+                          className="h-8 text-sm"
+                        />
+                        <p className="text-xs text-primary font-medium">{formatCurrency(loanAmount)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          최대 {formatCurrency(selectedProduct.maxAmount)}
+                        </p>
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        최대 {formatCurrency(selectedProduct.maxAmount)}까지 가능
-                      </p>
+                      {/* 대출 기간 */}
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">대출 기간</Label>
+                        <Select
+                          value={String(loanPeriod)}
+                          onValueChange={(v) => setLoanPeriod(Number(v))}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from(
+                              {
+                                length:
+                                  (selectedProduct.maxPeriod - selectedProduct.minPeriod) / 12 + 1,
+                              },
+                              (_, i) => selectedProduct.minPeriod + i * 12
+                            ).map((months) => (
+                              <SelectItem key={months} value={String(months)}>
+                                {months}개월 ({months / 12}년)
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
 
-                    {/* 대출 기간 */}
-                    <div className="space-y-2">
-                      <Label>대출 기간</Label>
-                      <Select
-                        value={String(loanPeriod)}
-                        onValueChange={(v) => setLoanPeriod(Number(v))}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from(
-                            {
-                              length:
-                                (selectedProduct.maxPeriod - selectedProduct.minPeriod) / 12 + 1,
-                            },
-                            (_, i) => selectedProduct.minPeriod + i * 12
-                          ).map((months) => (
-                            <SelectItem key={months} value={String(months)}>
-                              {months}개월 ({months / 12}년)
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {/* 상환 방법 */}
-                    <div className="space-y-3">
-                      <Label>상환 방법</Label>
-                      <RadioGroup
-                        value={repaymentMethod}
-                        onValueChange={(v) => setRepaymentMethod(v as RepaymentMethod)}
-                      >
+                    {/* 상환 방법 - 가로 버튼 그룹 */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">상환 방법</Label>
+                      <div className="flex gap-1.5">
                         {selectedProduct.repaymentMethods.map((method) => (
-                          <div key={method} className="flex items-center space-x-2">
-                            <RadioGroupItem value={method} id={method} />
-                            <label htmlFor={method} className="flex-1 cursor-pointer">
-                              <div className="flex items-center justify-between p-3 rounded-md hover:bg-accent transition-colors">
-                                <span>{getRepaymentMethodName(method)}</span>
-                                <span className="text-sm text-muted-foreground">
-                                  {method === 'maturity' && '만기에 원금 일시 상환'}
-                                  {method === 'equal-principal' && '원금 동일, 이자 감소'}
-                                  {method === 'equal-payment' && '매월 동일 금액'}
-                                </span>
-                              </div>
-                            </label>
-                          </div>
+                          <button
+                            key={method}
+                            onClick={() => setRepaymentMethod(method)}
+                            className={`flex-1 py-1.5 px-2 rounded text-xs font-medium border transition-colors ${
+                              repaymentMethod === method
+                                ? 'bg-primary text-primary-foreground border-primary'
+                                : 'bg-white text-muted-foreground border-border hover:border-primary/50'
+                            }`}
+                          >
+                            {getRepaymentMethodName(method)}
+                          </button>
                         ))}
-                      </RadioGroup>
+                      </div>
                     </div>
 
-                    {/* 금리 정보 */}
-                    <div className="p-4 bg-primary/10 border border-primary/20 rounded-lg">
-                      <div className="flex items-center gap-2 mb-2">
-                        <TrendingUp className="w-5 h-5 text-primary" />
-                        <span>적용 금리 범위</span>
-                      </div>
-                      <p className="text-2xl text-primary">
-                        {selectedProduct.interestRateMin}%
-                        <span className="text-base"> ~ {selectedProduct.interestRateMax}%</span>
-                        <span className="text-base ml-1">연</span>
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        계산은 최저금리({selectedProduct.interestRateMin}%) 기준으로 표시됩니다
-                      </p>
+                    {/* 금리 정보 - 인라인 뱃지 */}
+                    <div className="flex items-center gap-2 p-2.5 bg-primary/10 rounded-lg">
+                      <TrendingUp className="w-4 h-4 text-primary flex-shrink-0" />
+                      <span className="text-xs text-muted-foreground">적용 금리</span>
+                      <span className="text-primary font-semibold text-sm">
+                        {selectedProduct.interestRateMin}% ~ {selectedProduct.interestRateMax}%
+                      </span>
+                      <span className="text-xs text-muted-foreground">(계산: 최저 기준)</span>
                     </div>
                   </div>
                 </Card>
@@ -553,56 +527,59 @@ export function LoanCalculator() {
                 {/* 계산 결과 */}
                 {calculation && (
                   <>
-                    <Card className="p-6 bg-gradient-to-br from-primary to-primary/80 text-primary-foreground">
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="p-3 bg-white/20 rounded-lg">
-                          <Calculator className="w-6 h-6" />
+                    <Card className="p-4 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="p-2 bg-white/20 rounded-md">
+                            <Calculator className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="text-xs text-primary-foreground/70">
+                              {getRepaymentMethodName(repaymentMethod)} 기준
+                            </p>
+                            <h3 className="text-sm font-semibold text-primary-foreground">월 상환액</h3>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="text-lg font-semibold text-primary-foreground">월 상환액</h3>
-                          <p className="text-primary-foreground/70 text-sm">
-                            {getRepaymentMethodName(repaymentMethod)} 기준
+                        <div className="text-right">
+                          <p className="text-2xl font-bold">{formatCurrency(calculation.monthlyPayment)}</p>
+                          <p className="text-xs text-primary-foreground/70">
+                            {repaymentMethod === 'maturity' ? '매월 이자만 납부' : '매월 납부액'}
                           </p>
                         </div>
                       </div>
-
-                      <p className="text-4xl mb-2">
-                        {formatCurrency(calculation.monthlyPayment)}
-                      </p>
-                      <p className="text-primary-foreground/70">
-                        {repaymentMethod === 'maturity'
-                          ? '매월 이자만 납부 (만기에 원금 상환)'
-                          : '매월 납부액'}
-                      </p>
                     </Card>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Card className="p-6 bg-white">
-                        <p className="text-muted-foreground mb-2">총 상환 금액</p>
-                        <p className="text-2xl">{formatCurrency(calculation.totalPayment)}</p>
-                      </Card>
-                      <Card className="p-6 bg-white">
-                        <p className="text-muted-foreground mb-2">총 이자</p>
-                        <p className="text-2xl text-orange-600">
-                          {formatCurrency(calculation.totalInterest)}
-                        </p>
-                      </Card>
-                      <Card className="p-6 bg-white">
-                        <p className="text-muted-foreground mb-2">대출 원금</p>
-                        <p className="text-2xl text-primary">
-                          {formatCurrency(calculation.loanAmount)}
-                        </p>
-                      </Card>
-                    </div>
+                    <Card className="p-3 bg-white">
+                      <div className="grid grid-cols-3 divide-x">
+                        <div className="px-3 py-1.5 text-center">
+                          <p className="text-xs text-muted-foreground">총 상환</p>
+                          <p className="text-base font-semibold mt-0.5">
+                            {formatCurrency(calculation.totalPayment)}
+                          </p>
+                        </div>
+                        <div className="px-3 py-1.5 text-center">
+                          <p className="text-xs text-muted-foreground">총 이자</p>
+                          <p className="text-base font-semibold text-orange-600 mt-0.5">
+                            {formatCurrency(calculation.totalInterest)}
+                          </p>
+                        </div>
+                        <div className="px-3 py-1.5 text-center">
+                          <p className="text-xs text-muted-foreground">대출 원금</p>
+                          <p className="text-base font-semibold text-primary mt-0.5">
+                            {formatCurrency(calculation.loanAmount)}
+                          </p>
+                        </div>
+                      </div>
+                    </Card>
 
                     {/* 월별 상환 스케줄 Bar Chart */}
                     {calculation.schedule && calculation.schedule.length > 0 && (
-                      <Card className="p-6 bg-white">
-                        <h3 className="text-lg font-semibold mb-4">월별 상환 스케줄</h3>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          원금과 이자의 월별 납부 구성을 확인하세요
-                        </p>
-                        <ResponsiveContainer width="100%" height={300}>
+                      <Card className="p-3 bg-white">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-sm font-semibold">월별 상환 스케줄</h3>
+                          <span className="text-xs text-muted-foreground">단위: 만원</span>
+                        </div>
+                        <ResponsiveContainer width="100%" height={180}>
                           <BarChart
                             data={calculation.schedule.map((item) => ({
                               month: `${item.month}월`,
@@ -633,39 +610,38 @@ export function LoanCalculator() {
                       </Card>
                     )}
 
-                    {/* 대출 조건 */}
-                    <Card className="p-6 bg-white">
-                      <h4 className="text-base font-medium mb-4">대출 조건</h4>
-                      <div className="space-y-2 text-sm">
+                    {/* 대출 조건 + 유의사항 통합 */}
+                    <Card className="p-4 bg-white">
+                      {/* 대출 조건 */}
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                        대출 조건
+                      </h4>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1 mb-4">
                         {selectedProduct.conditions.map((condition, index) => (
-                          <div key={index} className="flex items-start gap-2">
-                            <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5" />
-                            <span className="text-muted-foreground">{condition}</span>
+                          <div key={index} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                            <div className="w-1 h-1 rounded-full bg-primary mt-1.5 flex-shrink-0" />
+                            <span>{condition}</span>
                           </div>
                         ))}
                       </div>
-                    </Card>
 
-                    {/* 유의사항 */}
-                    <Card className="p-6 bg-amber-50 border-amber-200">
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="p-2 bg-amber-100 rounded-lg">
-                          <Info className="w-5 h-5 text-amber-600" />
+                      {/* 구분선 */}
+                      <div className="border-t pt-3">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <Info className="w-3.5 h-3.5 text-amber-600" />
+                          <h4 className="text-xs font-semibold text-amber-700">유의사항</h4>
                         </div>
-                        <h4 className="text-base font-medium">유의사항</h4>
-                      </div>
-                      <div className="space-y-2 text-sm text-muted-foreground">
-                        <p>• 본 계산 결과는 참고용이며, 실제 대출 조건은 금융기관과 상담 후 결정됩니다.</p>
-                        <p>• 개인의 신용도, 소득, DSR 비율 등에 따라 대출 한도와 금리가 달라질 수 있습니다.</p>
-                        <p>• 중도상환 수수료, 인지세 등 부대비용이 추가로 발생할 수 있습니다.</p>
-                        <p>• 정확한 대출 상담은 해당 금융기관에 문의하시기 바랍니다.</p>
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                          <p>• 본 계산 결과는 참고용이며, 실제 대출 조건은 금융기관과 상담 후 결정됩니다.</p>
+                          <p>• 개인 신용도·소득·DSR 비율에 따라 한도와 금리가 달라질 수 있습니다.</p>
+                        </div>
                       </div>
                     </Card>
 
                     {/* 액션 버튼 */}
-                    <div className="flex gap-4">
+                    <div className="flex gap-3">
                       <div className="flex-1 relative group">
-                        <Button size="lg" className="w-full" disabled>
+                        <Button className="w-full" disabled>
                           <Wallet className="w-4 h-4 mr-2" />
                           대출 상담 신청
                         </Button>
@@ -673,7 +649,7 @@ export function LoanCalculator() {
                           서비스 준비 중
                         </div>
                       </div>
-                      <Button size="lg" variant="outline" className="flex-1" onClick={handleReset}>
+                      <Button variant="outline" className="flex-1" onClick={handleReset}>
                         <Calculator className="w-4 h-4 mr-2" />
                         다른 조건으로 계산
                       </Button>
