@@ -67,6 +67,7 @@ async function updateCoordinates() {
     try {
       console.log(`${progress} 🔍 검색 중: ${property.name}...`);
 
+      const vworldKey = process.env.VWORLD_API_KEY;
       const cleanName = property.name.replace(/\([^)]*\)/g, '').replace(/\s+/g, ' ').trim();
       const guMatch = property.address.match(/(분당구|수정구|중원구)/);
       const gu = guMatch ? guMatch[1] : '성남시';
@@ -75,38 +76,33 @@ async function updateCoordinates() {
 
       let result: { lat: number; lng: number; address: string } | null = null;
 
-      // 1순위: 단지명 + 구 + 아파트/오피스텔 — 건물명 검색이 도로 검색보다 정확
-      const nameQueries = [
-        `${property.name} ${gu} 성남시`,
-        `${cleanName} ${gu} 성남시`,
-        `${cleanName} ${dong} 성남시`,
-      ];
-      for (const q of nameQueries) {
-        if (result) break;
-        try {
-          const params = new URLSearchParams({ q, format: 'json', limit: '3', countrycodes: 'kr', addressdetails: '1' });
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?${params}`,
-            { headers: { 'User-Agent': 'seongnam-jeonse-app/1.0' } }
-          );
-          if (response.ok) {
-            const data = await response.json();
-            // 건물(building) 타입 결과 우선, 없으면 첫 번째 결과 사용
-            const building = data.find((d: any) => d.addresstype === 'building' || d.type === 'apartments' || d.type === 'residential') || data[0];
-            if (building) {
-              result = { lat: parseFloat(building.lat), lng: parseFloat(building.lon), address: property.address };
+      // 1순위: VWorld 도로명주소 API — 국토부 공식 건물 좌표 (WGS84), 가장 정확
+      if (!result && vworldKey && property.roadAddress) {
+        const addresses = [property.roadAddress];
+        for (const addr of addresses) {
+          if (result) break;
+          try {
+            const params = new URLSearchParams({
+              service: 'address', request: 'getcoord', format: 'json',
+              type: 'ROAD', key: vworldKey, address: addr,
+            });
+            const response = await fetch(`https://api.vworld.kr/req/address?${params}`,
+              { headers: { 'User-Agent': 'seongnam-jeonse-app/1.0' } });
+            if (response.ok) {
+              const data = await response.json();
+              if (data.response?.status === 'OK') {
+                const pt = data.response.result.point;
+                result = { lat: parseFloat(pt.y), lng: parseFloat(pt.x), address: addr };
+              }
             }
-          }
-        } catch (_) { /* 다음 시도 */ }
-        await new Promise((resolve) => setTimeout(resolve, 300));
+          } catch (_) { /* 다음 시도 */ }
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
       }
 
-      // 2순위: Kakao 키워드 검색 (심사 통과 시 자동 작동 — 가장 정확)
+      // 2순위: Kakao 키워드 검색 (심사 통과 시 자동 작동 — 건물명 기반으로 정확)
       if (!result && apiKey) {
-        const kakaoQueries = [
-          `성남시 ${property.name}`,
-          `성남시 ${cleanName}`,
-        ];
+        const kakaoQueries = [`성남시 ${property.name}`, `성남시 ${cleanName}`];
         for (const q of kakaoQueries) {
           if (result) break;
           try {
@@ -126,22 +122,30 @@ async function updateCoordinates() {
         }
       }
 
-      // 3순위: 도로명 주소 검색 (주소 보간이라 덜 정확하지만 fallback으로 사용)
-      if (!result && property.roadAddress) {
-        try {
-          const params = new URLSearchParams({ q: property.roadAddress, format: 'json', limit: '1', countrycodes: 'kr' });
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/search?${params}`,
-            { headers: { 'User-Agent': 'seongnam-jeonse-app/1.0' } }
-          );
-          if (response.ok) {
-            const data = await response.json();
-            if (data.length > 0) {
-              result = { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon), address: property.roadAddress };
+      // 3순위: Nominatim 단지명 검색 (fallback)
+      if (!result) {
+        const nameQueries = [
+          `${property.name} ${gu} 성남시`,
+          `${cleanName} ${dong} 성남시`,
+        ];
+        for (const q of nameQueries) {
+          if (result) break;
+          try {
+            const params = new URLSearchParams({ q, format: 'json', limit: '3', countrycodes: 'kr', addressdetails: '1' });
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/search?${params}`,
+              { headers: { 'User-Agent': 'seongnam-jeonse-app/1.0' } }
+            );
+            if (response.ok) {
+              const data = await response.json();
+              const building = data.find((d: any) =>
+                d.addresstype === 'building' || d.type === 'apartments' || d.type === 'residential'
+              ) || data[0];
+              if (building) result = { lat: parseFloat(building.lat), lng: parseFloat(building.lon), address: property.address };
             }
-          }
-        } catch (_) { /* 다음 시도 */ }
-        await new Promise((resolve) => setTimeout(resolve, 200));
+          } catch (_) { /* 다음 시도 */ }
+          await new Promise((resolve) => setTimeout(resolve, 300));
+        }
       }
 
       const idx = propMap.get(property.id);
