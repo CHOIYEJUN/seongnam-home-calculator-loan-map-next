@@ -16,7 +16,8 @@ export interface Property {
 export interface PropertyUnit {
   id: string;
   propertyId: string;
-  area: number; // 평형
+  area: number; // 표시용 평형
+  areaSqm: number; // 전용면적 ㎡ (예측 API에 사용)
   floor?: number; // 유닛 층수 (해당 호수의 실제 층)
   officialPrice: number; // 공시지가
   marketPrice: number; // 시세

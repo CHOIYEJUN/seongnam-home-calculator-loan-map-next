@@ -63,6 +63,8 @@ export function loadProperties(): Property[] {
         id: price.id,
         propertyId: price.propertyId,
         area: price.areaPyeong,
+        areaSqm: price.area,
+        floor: price.floor,
         officialPrice: price.officialPrice,
         marketPrice: price.marketPrice,
         jeonsePrice: price.jeonsePrice,

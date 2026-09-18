@@ -51,6 +51,10 @@ export function MapView() {
 
       {/* 매물 정보 패널 (우측) */}
       <PropertyPanel />
+
+      <p className="absolute bottom-8 left-4 z-10 text-[10px] text-muted-foreground/80 pointer-events-none">
+        시 경계 © OpenStreetMap
+      </p>
     </div>
   );
 }

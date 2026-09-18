@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const BACKEND_URL =
-  process.env.JEONSE_PREDICT_API ?? 'https://web-production-e962b7.up.railway.app';
+  process.env.JEONSE_PREDICT_API ?? 'http://127.0.0.1:8000';
 
 export async function POST(request: NextRequest) {
   try {

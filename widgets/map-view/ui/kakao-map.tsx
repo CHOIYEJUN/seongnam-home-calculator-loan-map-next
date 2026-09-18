@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Property } from '@/shared/types/property';
 import { useAppStore } from '@/shared/config/store';
+import { seongnamBoundary } from '@/entities/region/model/seongnam-boundary';
+import { overlayGeoJsonOnKakaoMap } from '@/shared/lib/kakao-boundary';
 
 interface KakaoMapProps {
   properties: Property[];
@@ -49,6 +51,8 @@ export function KakaoMap({ properties }: KakaoMapProps) {
 
     const map = new window.kakao.maps.Map(mapRef.current, mapOption);
     mapInstanceRef.current = map;
+
+    const boundaryPolygons = overlayGeoJsonOnKakaoMap(map, seongnamBoundary);
 
     // 마커 생성
     const markers = properties.map((property) => {
@@ -101,6 +105,7 @@ export function KakaoMap({ properties }: KakaoMapProps) {
 
     return () => {
       markers.forEach(marker => marker.setMap(null));
+      boundaryPolygons.forEach((polygon) => polygon.setMap(null));
       markersRef.current = [];
       mapInstanceRef.current = null;
     };

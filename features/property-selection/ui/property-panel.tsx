@@ -1,15 +1,76 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { PropertyUnit } from '@/shared/types/property';
 import { formatCurrency } from '@/shared/lib/format';
-import { predictJeonsePrice } from '@/shared/lib/jeonse-predict';
+import { dongFromAddress, predictJeonsePrice } from '@/shared/lib/jeonse-predict';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { Building2, MapPin, Home, Calculator, Sparkles } from 'lucide-react';
+import { Building2, MapPin, Home, Calculator, Sparkles, Info } from 'lucide-react';
 import { useAppStore } from '@/shared/config/store';
+
+function CurrentBasisHint() {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+
+  const show = () => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setCoords({ top: r.top - 8, left: r.right });
+  };
+
+  const hide = () => setCoords(null);
+
+  useEffect(() => {
+    if (!coords) return;
+    const update = () => {
+      const el = triggerRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setCoords({ top: r.top - 8, left: r.right });
+    };
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [coords]);
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        className="inline-flex items-center gap-0.5 text-xs text-muted-foreground cursor-help outline-none underline decoration-dotted underline-offset-2"
+        aria-describedby={coords ? 'ai-jeonse-predict-hint' : undefined}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+      >
+        <Info className="w-3 h-3" />
+        오늘 기준
+      </button>
+      {coords &&
+        createPortal(
+          <div
+            id="ai-jeonse-predict-hint"
+            role="tooltip"
+            className="fixed z-100 w-64 -translate-x-full -translate-y-full px-2.5 py-2 rounded-md bg-foreground text-background text-xs leading-relaxed shadow-lg pointer-events-none text-left"
+            style={{ top: coords.top, left: coords.left }}
+          >
+            오늘 기준 가장 최신 전세가를 예측하도록 학습된 AI 모델의 예측값입니다
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
 
 export function PropertyPanel() {
   const { selectedProperty, selectedUnit, setSelectedUnit, setCurrentView } = useAppStore();
@@ -27,12 +88,18 @@ export function PropertyPanel() {
     setAiPredictLoading(true);
     setAiPredictError(null);
     const salePriceMan = Math.round(selectedUnit.marketPrice / 10000);
+    const lastJeonseMan = Math.round(selectedUnit.jeonsePrice / 10000);
     predictJeonsePrice({
       salePrice: salePriceMan,
-      area: selectedUnit.area,
+      area: selectedUnit.areaSqm > 0 ? selectedUnit.areaSqm : selectedUnit.area * 3.3058,
       floor: selectedUnit.floor ?? Math.round((selectedProperty.floor ?? 10) / 2),
       buildYear: selectedProperty.buildYear ?? 2000,
       saleYear: new Date().getFullYear(),
+      apartmentName: selectedProperty.name,
+      dong: dongFromAddress(selectedProperty.address),
+      lastJeonsePrice: lastJeonseMan > 0 ? lastJeonseMan : undefined,
+      lastSaleDate: selectedUnit.lastSaleDate,
+      lastJeonseDate: selectedUnit.lastJeonseDate,
     })
       .then((price) => {
         setAiPredictedJeonse(price);
@@ -164,9 +231,14 @@ export function PropertyPanel() {
                     ) : aiPredictError ? (
                       <span className="text-sm text-destructive">{aiPredictError}</span>
                     ) : aiPredictedJeonse !== null ? (
-                      <span className="font-medium text-amber-700 dark:text-amber-400">
-                        {formatCurrency(aiPredictedJeonse)}
-                      </span>
+                      <div className="text-right">
+                        <div className="font-medium text-amber-700 dark:text-amber-400">
+                          {formatCurrency(aiPredictedJeonse)}
+                        </div>
+                        <div className="mt-0.5">
+                          <CurrentBasisHint />
+                        </div>
+                      </div>
                     ) : null}
                   </div>
                 </Card>
